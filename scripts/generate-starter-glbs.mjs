@@ -822,42 +822,59 @@ async function writeIfNeeded(relPath, bufferFn) {
 async function main() {
   await writeIfNeeded('tashkent.glb', buildTashkentTowerGlb);
   await writeIfNeeded('character.glb', buildCharacterGlb);
-  await writeIfNeeded('cars/cobalt.glb', () =>
-    buildCarGlb({
-      name: 'Cobalt',
-      bodyColor: [0.95, 0.96, 0.98, 1],
-      metallic: 0.45,
-      roughness: 0.22,
-      length: 4.48,
-      width: 1.82,
-      cabinHeight: 0.56,
-      wheelRadius: 0.34,
-    })
-  );
-  await writeIfNeeded('cars/malibu.glb', () =>
-    buildCarGlb({
-      name: 'Malibu',
-      bodyColor: [0.09, 0.10, 0.13, 1],
-      metallic: 0.78,
-      roughness: 0.16,
-      length: 4.86,
-      width: 1.90,
-      cabinHeight: 0.50,
-      wheelRadius: 0.36,
-    })
-  );
-  await writeIfNeeded('cars/gentra.glb', () =>
-    buildCarGlb({
-      name: 'Gentra',
-      bodyColor: [0.12, 0.28, 0.56, 1],
-      metallic: 0.62,
-      roughness: 0.20,
-      length: 4.52,
-      width: 1.78,
-      cabinHeight: 0.54,
-      wheelRadius: 0.33,
-    })
-  );
+
+  let skipCars = false;
+  if (IF_MISSING) {
+    try {
+      const carsDir = path.join(MODELS_DIR, 'cars');
+      const existingCars = (await fs.readdir(carsDir)).filter((f) => f.toLowerCase().endsWith('.glb'));
+      if (existingCars.length > 0) {
+        console.log(`[generate-starter-glbs] Custom car GLBs found (${existingCars.join(', ')}), skipping starter cars.`);
+        skipCars = true;
+      }
+    } catch {
+      // Directory doesn't exist yet
+    }
+  }
+
+  if (!skipCars) {
+    await writeIfNeeded('cars/cobalt.glb', () =>
+      buildCarGlb({
+        name: 'Cobalt',
+        bodyColor: [0.95, 0.96, 0.98, 1],
+        metallic: 0.45,
+        roughness: 0.22,
+        length: 4.48,
+        width: 1.82,
+        cabinHeight: 0.56,
+        wheelRadius: 0.34,
+      })
+    );
+    await writeIfNeeded('cars/malibu.glb', () =>
+      buildCarGlb({
+        name: 'Malibu',
+        bodyColor: [0.09, 0.10, 0.13, 1],
+        metallic: 0.78,
+        roughness: 0.16,
+        length: 4.86,
+        width: 1.90,
+        cabinHeight: 0.50,
+        wheelRadius: 0.36,
+      })
+    );
+    await writeIfNeeded('cars/gentra.glb', () =>
+      buildCarGlb({
+        name: 'Gentra',
+        bodyColor: [0.12, 0.28, 0.56, 1],
+        metallic: 0.62,
+        roughness: 0.20,
+        length: 4.52,
+        width: 1.78,
+        cabinHeight: 0.54,
+        wheelRadius: 0.33,
+      })
+    );
+  }
 }
 
 main().catch((err) => {

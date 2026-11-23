@@ -68,7 +68,9 @@ export class ModelLoader {
       receiveShadows = true,
       targetLength = null,
       targetHeight = null,
+      pitchOffsetDeg = 0,
       yawOffsetDeg = 0,
+      rollOffsetDeg = 0,
     } = options;
 
     const asset = await this.loadContainer(url);
@@ -82,8 +84,8 @@ export class ModelLoader {
     pivot.addChild(modelEntity);
     root.addChild(pivot);
 
-    if (yawOffsetDeg) {
-      pivot.setLocalEulerAngles(0, yawOffsetDeg, 0);
+    if (pitchOffsetDeg || yawOffsetDeg || rollOffsetDeg) {
+      pivot.setLocalEulerAngles(pitchOffsetDeg, yawOffsetDeg, rollOffsetDeg);
     }
 
     // Force world transform update before measuring AABB

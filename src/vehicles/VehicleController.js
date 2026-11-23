@@ -159,6 +159,7 @@ export class VehicleController {
     const seen = new Set();
     const renders = this.modelData.modelEntity.findComponents('render');
     for (const render of renders) {
+      const entityName = (render.entity?.name || '').toLowerCase();
       for (const mi of render.meshInstances) {
         const mat = mi.material;
         if (!mat || seen.has(mat)) continue;
@@ -170,7 +171,9 @@ export class VehicleController {
           name.includes('body') ||
           name.includes('carpaint') ||
           name.includes('chassis') ||
-          name.includes('coat');
+          name.includes('coat') ||
+          entityName.includes('carpaint') ||
+          entityName.includes('bonnet_ok_primary');
         const isExcluded =
           name.includes('glass') ||
           name.includes('window') ||
@@ -181,9 +184,10 @@ export class VehicleController {
           name.includes('headlight') ||
           name.includes('taillight') ||
           name.includes('trim') ||
-          name.includes('dark');
+          name.includes('dark') ||
+          name.includes('blackpaint');
 
-        if (isCarPaint && !isExcluded) {
+        if (isCarPaint && !isExcluded && mat.diffuse) {
           this.paintMaterials.push(mat);
           this.originalPaintColors.push(mat.diffuse.clone());
         }
@@ -207,9 +211,24 @@ export class VehicleController {
   /**
    * Automatically detects the 4 wheels by name (wheel_fl/fr/rl/rr) OR
    * bounding-box corner heuristics, then wraps each in a centered steerPivot -> spinPivot.
+   * Rejects merged meshes that span multiple corners of the vehicle.
    */
   _detectAndWrapWheels() {
     const model = this.modelData.modelEntity;
+    const carBounds = this.modelLoader.computeEntityBounds(model);
+    const carCenter = carBounds.center;
+    const carHalf = carBounds.halfExtents;
+
+    const isSingleWheelNode = (node) => {
+      if (!node) return false;
+      const info = getNodeLocalBoundsRelativeTo(node, this.root);
+      if (!info) return false;
+      const ext = info.worldBox.halfExtents;
+      // If a mesh spans >65% of the car's width or >45% of its length, it contains multiple wheels or chassis
+      if (ext.x > carHalf.x * 0.65 || ext.z > carHalf.z * 0.48) return false;
+      return ext.y * 2 > 0.22 && ext.y * 2 < carHalf.y * 1.45;
+    };
+
     const wheelSlots = {
       fl: ['wheel_fl', 'fl_wheel', 'wheel_lf', 'front_left_wheel', 'wheel_front_left', 'tire_fl', 'rim_fl'],
       fr: ['wheel_fr', 'fr_wheel', 'wheel_rf', 'front_right_wheel', 'wheel_front_right', 'tire_fr', 'rim_fr'],
@@ -224,11 +243,14 @@ export class VehicleController {
       rr: findNodeByNames(model, wheelSlots.rr),
     };
 
+    for (const k of ['fl', 'fr', 'rl', 'rr']) {
+      if (foundNodes[k] && !isSingleWheelNode(foundNodes[k])) {
+        foundNodes[k] = null;
+      }
+    }
+
     // Bounding-box spatial fallback for arbitrary third-party GLBs
     if (!foundNodes.fl || !foundNodes.fr || !foundNodes.rl || !foundNodes.rr) {
-      const carBounds = this.modelLoader.computeEntityBounds(model);
-      const carCenter = carBounds.center;
-      const carHalf = carBounds.halfExtents;
       const candidates = [];
 
       const renders = model.findComponents('render');
@@ -241,8 +263,13 @@ export class VehicleController {
         if (!info) continue;
         const ext = info.worldBox.halfExtents;
         const h = ext.y * 2;
-        const isWheelSized = h > 0.25 && h < carHalf.y * 1.35;
-        const isNamedWheel = /wheel|tire|tyre|rim|koleso|disk/i.test(nName);
+        // Must be single-wheel sized (cannot span across left+right or front+rear)
+        const isWheelSized =
+          h > 0.22 &&
+          h < carHalf.y * 1.45 &&
+          ext.x < carHalf.x * 0.65 &&
+          ext.z < carHalf.z * 0.48;
+        const isNamedWheel = /wheel|tire|tyre|rim|koleso|disk|roda/i.test(nName);
         const relX = info.centerLocal.x;
         const relZ = info.centerLocal.z;
         const isCorner =

@@ -475,10 +475,20 @@ export class TashkentCity {
 
   async _mountTashkentTower() {
     try {
+      // Inspect unrotated container bounds first in case tashkent.glb is Z-up (like Sketchfab FBX exports)
+      const probe = await this.modelLoader.instantiateGrounded('./models/tashkent.glb', {
+        castShadows: false,
+        receiveShadows: false,
+      });
+      const ext = probe.bounds.halfExtents;
+      const isZUp = ext.z > ext.y * 1.4;
+      probe.root.destroy();
+
       const tower = await this.modelLoader.instantiateGrounded('./models/tashkent.glb', {
         castShadows: true,
         receiveShadows: true,
-        targetHeight: 118,
+        targetHeight: 112,
+        pitchOffsetDeg: isZUp ? -90 : 0,
         yawOffsetDeg: 0,
       });
       tower.root.setPosition(0, 0.28, 0);

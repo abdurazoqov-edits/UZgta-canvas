@@ -54,8 +54,8 @@ export class CharacterController {
     this.modelData = await this.modelLoader.instantiateGrounded('./models/character.glb', {
       castShadows: true,
       receiveShadows: true,
-      targetHeight: 1.78,
-      yawOffsetDeg: 0,
+      targetHeight: 1.76,
+      yawOffsetDeg: 180,
     });
 
     this.root.addChild(this.modelData.root);
@@ -162,7 +162,29 @@ export class CharacterController {
 
   _applyProceduralLimbGait(dt, moveSpeed, isRunning) {
     const b = this.bones;
-    if (!b.leftThigh && !b.leftUpperArm) return;
+    if (!b.leftThigh && !b.leftUpperArm) {
+      // Static unrigged mesh fallback: gentle stride bob, sway, and forward lean
+      const rootModel = this.modelData?.root;
+      if (!rootModel) return;
+      if (moveSpeed < 0.18) {
+        this._phase += dt * 2.0;
+        const curPos = rootModel.getLocalPosition();
+        const curRot = rootModel.getLocalEulerAngles();
+        const k = Math.min(1, dt * 10);
+        const idleBob = Math.sin(this._phase) * 0.006;
+        rootModel.setLocalPosition(0, curPos.y + (idleBob - curPos.y) * k, 0);
+        rootModel.setLocalEulerAngles(curRot.x * (1 - k), 0, curRot.z * (1 - k));
+        return;
+      }
+      const freq = isRunning ? 12.5 : 8.5;
+      this._phase += dt * freq;
+      const bob = Math.abs(Math.sin(this._phase)) * (isRunning ? 0.055 : 0.028);
+      const sway = Math.sin(this._phase) * (isRunning ? 3.2 : 1.8);
+      const lean = isRunning ? -9.5 : -4.5;
+      rootModel.setLocalPosition(0, bob, 0);
+      rootModel.setLocalEulerAngles(lean, 0, sway);
+      return;
+    }
 
     if (moveSpeed < 0.18) {
       this._phase += dt * 2.2;
