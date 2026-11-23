@@ -1,0 +1,85 @@
+name: Build Android APK
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  build-android-apk:
+    name: Build PlayCanvas Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Java JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Install Node dependencies
+        run: npm ci || npm install
+
+      - name: Ensure offline Draco GLB decoder assets
+        run: |
+          mkdir -p public/draco
+          if [ ! -f public/draco/draco_wasm_wrapper.js ]; then
+            curl -fsSL https://www.gstatic.com/draco/versioned/decoders/1.5.7/draco_wasm_wrapper.js -o public/draco/draco_wasm_wrapper.js
+          fi
+          if [ ! -f public/draco/draco_decoder.wasm ]; then
+            curl -fsSL https://www.gstatic.com/draco/versioned/decoders/1.5.7/draco_decoder.wasm -o public/draco/draco_decoder.wasm
+          fi
+
+      - name: Generate starter GLB models & ensure campus city models
+        run: |
+          node scripts/generate-starter-glbs.mjs --if-missing
+          node scripts/download-campus-models.mjs
+
+      - name: Build production web bundle (Vite)
+        run: npm run build
+
+      - name: Initialize & sync Capacitor Android project
+        run: |
+          if [ ! -d "android" ]; then
+            npx cap add android
+          fi
+          node scripts/configure-android.mjs
+          npx cap sync android
+
+      - name: Build Debug APK with Gradle
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Upload Android APK to GitHub Actions Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tashkent-street-drive-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
